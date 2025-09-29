@@ -12,19 +12,23 @@ jobs:
         working-directory: my-app
 
     steps:
+      # 1. Checkout code
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 2. Set up JDK
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: '17'
 
+      # 3. Build, Test & Generate Coverage
       - name: Build, Test & Coverage
         run: mvn -B clean test jacoco:report
 
-      - name: Extract JaCoCo Coverage
+      # 4. Extract JaCoCo Coverage %
+      - name: Extract Coverage
         id: coverage
         run: |
           XML="target/site/jacoco/jacoco.xml"
@@ -35,22 +39,26 @@ jobs:
             echo "coverage=$COV" >> $GITHUB_OUTPUT
           fi
 
+      # 5. Post Coverage & Test Results as PR Comment using PAT
       - name: Post Coverage to PR
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: peter-evans/create-or-update-comment@v4
         with:
-          message: |
+          token: ${{ secrets.PAT_TOKEN }}  # Your GitHub PAT secret
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
             ### ✅ Build & Test Passed
             📊 Line coverage: **${{ steps.coverage.outputs.coverage }}%**
-          recreate: true
-          github-token: ${{ secrets.PAT_TOKEN }}  # Use PAT here
 
-      - name: Check Code Format
+      # 6. Check Code Format
+      - name: Check Code Formatting
         run: mvn fmt:check
 
+      # 7. Run Checkstyle
       - name: Run Checkstyle
         run: mvn checkstyle:check
 
-      - name: Validate PR Description (JIRA ID)
+      # 8. Validate PR Description (JIRA ID)
+      - name: Validate PR Description
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
@@ -61,6 +69,7 @@ jobs:
             exit 1
           fi
 
+      # 9. Validate PR Labels
       - name: Validate PR Labels
         env:
           LABELS: ${{ toJson(github.event.pull_request.labels) }}
