@@ -1,7 +1,21 @@
 package com.example;
 
-public class App {
-    public int add(int a, int b) {
+/**
+ * Simple App class for demo purposes.
+ */
+public final class App {
+
+    /**
+     * Adds two numbers.
+     */
+    public int add(final int a, final int b) {
         return a + b;
+    }
+
+    /**
+     * Subtracts b from a.
+     */
+    public int subtract(final int a, final int b) {
+        return a - b;
     }
 }
