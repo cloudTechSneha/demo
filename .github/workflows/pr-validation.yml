@@ -1,29 +1,40 @@
-name: PR Validation (Maven)
+name: PR Validation (Maven + JaCoCo)
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: my-app
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Build, Test & Coverage
         run: mvn -B clean test jacoco:report
+
       - name: Extract JaCoCo Coverage
         id: coverage
         run: |
           XML="target/site/jacoco/jacoco.xml"
-          COV=$(grep -m1 '<counter type="LINE"' $XML | sed -E 's/.*missed="([0-9]+)".*covered="([0-9]+)".*/\1 \2/' | awk '{total=$1+$2; if(total==0){print 0}else{print ($2*100/total)}}')
-          echo "coverage=$COV" >> $GITHUB_OUTPUT
+          if [ ! -f "$XML" ]; then
+            echo "coverage=0.0" >> $GITHUB_OUTPUT
+          else
+            COV=$(grep -m1 '<counter type="LINE"' $XML | sed -E 's/.*missed="([0-9]+)".*covered="([0-9]+)".*/\1 \2/' | awk '{total=$1+$2; if(total==0){print 0}else{print ($2*100/total)}}')
+            echo "coverage=$COV" >> $GITHUB_OUTPUT
+          fi
+
       - name: Post Coverage to PR
         uses: marocchino/sticky-pull-request-comment@v2
         with:
@@ -31,10 +42,14 @@ jobs:
             ### ✅ Build & Test Passed
             📊 Line coverage: **${{ steps.coverage.outputs.coverage }}%**
           recreate: true
+          github-token: ${{ secrets.PAT_TOKEN }}  # Use PAT here
+
       - name: Check Code Format
         run: mvn fmt:check
+
       - name: Run Checkstyle
         run: mvn checkstyle:check
+
       - name: Validate PR Description (JIRA ID)
         env:
           BODY: ${{ github.event.pull_request.body }}
@@ -45,6 +60,7 @@ jobs:
             echo "❌ Missing JIRA ID in PR description"
             exit 1
           fi
+
       - name: Validate PR Labels
         env:
           LABELS: ${{ toJson(github.event.pull_request.labels) }}
