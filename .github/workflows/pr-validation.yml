@@ -1,0 +1,57 @@
+name: PR Validation (Maven)
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my-app
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build, Test & Coverage
+        run: mvn -B clean test jacoco:report
+      - name: Extract JaCoCo Coverage
+        id: coverage
+        run: |
+          XML="target/site/jacoco/jacoco.xml"
+          COV=$(grep -m1 '<counter type="LINE"' $XML | sed -E 's/.*missed="([0-9]+)".*covered="([0-9]+)".*/\1 \2/' | awk '{total=$1+$2; if(total==0){print 0}else{print ($2*100/total)}}')
+          echo "coverage=$COV" >> $GITHUB_OUTPUT
+      - name: Post Coverage to PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          message: |
+            ### ✅ Build & Test Passed
+            📊 Line coverage: **${{ steps.coverage.outputs.coverage }}%**
+          recreate: true
+      - name: Check Code Format
+        run: mvn fmt:check
+      - name: Run Checkstyle
+        run: mvn checkstyle:check
+      - name: Validate PR Description (JIRA ID)
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if echo "$BODY" | grep -Eq 'JIRA-[0-9]+'; then
+            echo "✅ JIRA ID found in PR description"
+          else
+            echo "❌ Missing JIRA ID in PR description"
+            exit 1
+          fi
+      - name: Validate PR Labels
+        env:
+          LABELS: ${{ toJson(github.event.pull_request.labels) }}
+        run: |
+          if [ "$LABELS" = "[]" ]; then
+            echo "❌ No labels found on PR"
+            exit 1
+          else
+            echo "✅ Labels present"
+          fi
