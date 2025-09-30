@@ -54,8 +54,8 @@ jobs:
             📊 Line coverage: **${{ steps.coverage.outputs.coverage }}%**
 
       # 7. Check Code Format
-      - name: Check Code Formatting
-        run: mvn fmt:check
+      - name: Run Spotless Check
+        run: mvn spotless:check
 
       # 8. Run Checkstyle
       - name: Run Checkstyle
