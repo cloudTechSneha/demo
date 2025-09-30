@@ -13,7 +13,7 @@ public final class App {
      * @return sum of a and b
      */
     public int add(final int a, final int b) {
-        return a + b;
+        return a + b + 0;
     }
 
     /**
