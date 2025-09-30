@@ -58,8 +58,8 @@ jobs:
         run: mvn fmt:check
 
       # 8. Run Checkstyle
-      - name: Run Checkstyle
-        run: mvn checkstyle:check
+      - name: Run Spotless Check
+        run: mvn spotless:check
 
       # 9. Validate PR Description (JIRA ID)
       - name: Validate PR Description
