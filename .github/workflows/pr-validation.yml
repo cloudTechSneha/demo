@@ -1,4 +1,4 @@
-name: PR Validation
+name: PR Validation (Maven + JaCoCo)
 
 on:
   pull_request:
@@ -7,6 +7,9 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my-app
 
     steps:
       # 1. Checkout code
@@ -20,34 +23,67 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 3. Apply Spotless formatting
+      # 3. Optional: Clean Maven cache to avoid dependency issues
+      - name: Clean Maven Repository
+        run: mvn dependency:purge-local-repository clean
+
+      # 4. Apply Spotless formatting
       - name: Apply Spotless Formatting
         run: mvn spotless:apply
 
-      # 4. Run Spotless check
+      # 5. Spotless check
       - name: Spotless Check
         run: mvn spotless:check
 
-      # 5. Run Checkstyle
+      # 6. Run Checkstyle
       - name: Run Checkstyle
         run: mvn checkstyle:check
 
-      # 6. Build and run tests
-      - name: Build & Test
-        run: mvn clean test
+      # 7. Build, Test & Generate Coverage
+      - name: Build, Test & Coverage
+        run: mvn -B clean test jacoco:report -U
 
-      # 7. JaCoCo code coverage
-      - name: Code Coverage
-        run: mvn jacoco:report
-
-      # 8. Validate PR description for JIRA ID
-      - name: Check PR Description for JIRA
-        uses: juliangruber/validate-pr-description@v1
-        with:
-          pattern: 'JIRA-\d+'
-          fail-message: 'PR description must include a JIRA ID'
-
-      # 9. Validate PR labels
-      - name: Check PR Labels
+      # 8. Extract JaCoCo Coverage %
+      - name: Extract Coverage
+        id: coverage
         run: |
-          python3 .github/scripts/validate_pr_labels.py
+          XML="target/site/jacoco/jacoco.xml"
+          if [ ! -f "$XML" ]; then
+            echo "coverage=0.0" >> $GITHUB_OUTPUT
+          else
+            COV=$(grep -m1 '<counter type="LINE"' $XML | sed -E 's/.*missed="([0-9]+)".*covered="([0-9]+)".*/\1 \2/' | awk '{total=$1+$2; if(total==0){print 0}else{print ($2*100/total)}}')
+            echo "coverage=$COV" >> $GITHUB_OUTPUT
+          fi
+
+      # 9. Post Coverage & Test Results as PR Comment using PAT
+      - name: Post Coverage to PR
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ### ✅ Build & Test Passed
+            📊 Line coverage: **${{ steps.coverage.outputs.coverage }}%**
+
+      # 10. Validate PR Description (JIRA ID)
+      - name: Validate PR Description
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if echo "$BODY" | grep -Eq 'JIRA-[0-9]+'; then
+            echo "✅ JIRA ID found in PR description"
+          else
+            echo "❌ Missing JIRA ID in PR description"
+            exit 1
+
+      # 11. Validate PR Labels
+      - name: Check PR Labels
+        env:
+          LABELS: ${{ toJson(github.event.pull_request.labels) }}
+        run: |
+          if [ "$LABELS" = "[]" ]; then
+            echo "❌ No labels found on PR"
+            exit 1
+          else
+            echo "✅ Labels present"
+          fi
