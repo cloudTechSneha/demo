@@ -13,7 +13,7 @@ public class AppTest {
     @Test
     void testAddSuccess() {
         // Successful scenario
-        assertEquals(5, app.add(2, 3));
+        assertEquals(6, app.add(2, 4));
         assertEquals(0, app.add(-2, 2));
     }
 
